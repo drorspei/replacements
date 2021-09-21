@@ -55,6 +55,14 @@ def retriever_awssecret(region_name, secret_id):
     )
 
 
+@retriever
+def retriever_env(name, default=None):
+    import os
+    res = os.getenv(name, default)
+    assert res is not None
+    return res
+
+
 class Replacer:
     def __init__(self, assignments: List[Assignment]) -> None:
         """
@@ -63,7 +71,7 @@ class Replacer:
         Assignments is a list of dictionaries, each containing a `name`, a
         `type`, and optionally `args` and `kwargs`.
 
-        There are currently 4 implemented types:
+        There are currently 5 implemented types:
             - identity: returns the argument passed to it.
             - localfile: passes the `args` and `kwargs` to `open` and then reads
                 the file object. The mode is always 'r'.
@@ -75,6 +83,9 @@ class Replacer:
             - awssecret: takes two arguments: `region_name` and `secret_id`.
                 Uses boto to call secretsmanager, and returns the returned
                 `SecretString`.
+            - env: takes two arguments: name, and optionally a default value.
+                If the environment variable doesn't exist and no default value
+                was passed, an AssertionError will be raised.
 
         Example:
             >>> Replacer([{
@@ -234,6 +245,42 @@ def test_fsspec_google():
     ])
 
     assert "google" in replacer("${a}")
+
+
+@test
+def test_env():
+    import os
+    os.environ["shimi"] = "Hello"
+    replacer = Replacer([
+        {
+            "name": "greeting",
+            "type": "env",
+            "args": ["shimi"]
+        },
+        {
+            "name": "name",
+            "type": "env",
+            "args": ["noshimi", "World"]
+        }
+    ])
+
+    assert replacer("${greeting}, ${name}!") == "Hello, World!"
+
+
+@test
+def test_no_env():
+    try:
+        Replacer([
+            {
+                "name": "a",
+                "type": "env",
+                "args": ["noshimi"]
+            }
+        ])
+    except AssertionError:
+        pass
+    else:
+        raise Exception("missing env didn't raise")
 
 
 if __name__ == "__main__":
