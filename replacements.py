@@ -64,12 +64,19 @@ def retriever_env(name):
 
 
 class Replacer:
-    def __init__(self, assignments: List[Assignment]) -> None:
+    def __init__(
+        self,
+        assignments: List[Assignment],
+        allow_missing: bool=False
+    ) -> None:
         """
         An object for replacing strings with other strings in json-like objects
 
         Assignments is a list of dictionaries, each containing a `name`, a
         `type`, and optionally `args`, `kwargs` and `default`.
+        If `allow_missing` is `False` (default), and a string to be replaced
+        has a "${name}" with no assignment to "name", a KeyError exception will
+        be thrown.
 
         There are currently 5 implemented types:
             - identity: returns the argument passed to it.
@@ -113,6 +120,7 @@ class Replacer:
             Hello, World!
         """
         self.variables: Dict[str, str] = {}
+        self.allow_missing = allow_missing
 
         for assignment in assignments:
             assignment = self.replace(assignment)
@@ -143,6 +151,8 @@ class Replacer:
         names = set(n[2:-1] for n in re.findall(replace_pattern, s))
         
         for name in names:
+            if self.allow_missing and name not in self.variables:
+                continue
             s = s.replace(f"${{{name}}}", self.variables[name])
 
         return s
@@ -166,6 +176,18 @@ def runtests():
 @test
 def test_empty():
     assert Replacer([])("hello") == "hello"
+
+
+@test
+def test_allow_missing():
+    try:
+        Replacer([])("${hello}")
+    except KeyError:
+        pass
+    else:
+        raise Exception("allow_missing incorrect behavior")
+
+    assert Replacer([], allow_missing=True)("${hello}") == "${hello}"
 
 
 @test
