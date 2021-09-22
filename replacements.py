@@ -56,9 +56,9 @@ def retriever_awssecret(region_name, secret_id):
 
 
 @retriever
-def retriever_env(name, default=None):
+def retriever_env(name):
     import os
-    res = os.getenv(name, default)
+    res = os.getenv(name)
     assert res is not None
     return res
 
@@ -69,7 +69,7 @@ class Replacer:
         An object for replacing strings with other strings in json-like objects
 
         Assignments is a list of dictionaries, each containing a `name`, a
-        `type`, and optionally `args` and `kwargs`.
+        `type`, and optionally `args`, `kwargs` and `default`.
 
         There are currently 5 implemented types:
             - identity: returns the argument passed to it.
@@ -83,9 +83,10 @@ class Replacer:
             - awssecret: takes two arguments: `region_name` and `secret_id`.
                 Uses boto to call secretsmanager, and returns the returned
                 `SecretString`.
-            - env: takes two arguments: name, and optionally a default value.
-                If the environment variable doesn't exist and no default value
-                was passed, an AssertionError will be raised.
+            - env: takes a single `name` argument, and looks for this 
+                environment variable. If the environment variable doesn't exist
+                and no default value was passed, an AssertionError will be
+                raised.
 
         Example:
             >>> Replacer([{
@@ -115,10 +116,21 @@ class Replacer:
 
         for assignment in assignments:
             assignment = self.replace(assignment)
-            self.variables[assignment['name']] = (
-                data_retrievers[assignment['type']]
-                (*assignment.get('args', []), **assignment.get('kwargs', {}))
-            )
+            variable = assignment['name']
+            data_retriever = data_retrievers[assignment['type']]
+
+            try:
+                self.variables[variable] = data_retriever(
+                    *assignment.get('args', []),
+                    **assignment.get('kwargs', {})
+                )
+            except KeyboardInterrupt:
+                raise
+            except Exception as e:
+                if "default" in assignment:
+                    self.variables[variable] = assignment["default"]
+                else:
+                    raise
 
     def replace(self, s):
         if isinstance(s, dict):
@@ -248,6 +260,18 @@ def test_fsspec_google():
 
 
 @test
+def test_default():
+    replacer = Replacer([{
+        "name": "name",
+        "type": "localfile",
+        "args": "/best/path/ever/yo",
+        "default": "World"
+    }])
+
+    assert replacer("Hello, ${name}!") == "Hello, World!"
+
+
+@test
 def test_env():
     import os
     os.environ["shimi"] = "Hello"
@@ -260,7 +284,8 @@ def test_env():
         {
             "name": "name",
             "type": "env",
-            "args": ["noshimi", "World"]
+            "args": ["noshimi"],
+            "default": "World"
         }
     ])
 
