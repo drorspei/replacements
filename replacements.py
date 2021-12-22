@@ -1,4 +1,7 @@
+import base64
 import re
+import uuid
+
 from typing import List, Callable, Dict, TypedDict, Any
 
 
@@ -30,6 +33,11 @@ def retriever(func: Callable[..., str]):
 @retriever
 def retriever_identity(s: str) -> str:
     return s
+
+
+@retriever
+def retriever_base64uuid4() -> str:
+    return base64.urlsafe_b64encode(uuid.uuid4().bytes).strip(b"=").decode()
 
 
 @retriever
@@ -78,7 +86,7 @@ class Replacer:
         has a "${name}" with no assignment to "name", a KeyError exception will
         be thrown.
 
-        There are currently 5 implemented types:
+        There are currently 6 implemented types:
             - identity: returns the argument passed to it.
             - localfile: passes the `args` and `kwargs` to `open` and then reads
                 the file object. The mode is always 'r'.
@@ -94,6 +102,9 @@ class Replacer:
                 environment variable. If the environment variable doesn't exist
                 and no default value was passed, an AssertionError will be
                 raised.
+            - base64uuid4; the base64 (the url safe "-_" variant) of a
+                `uuid.uuid4` call. Use this to create a unique id that can be
+                used in multiple derived replacements.
 
         Example:
             >>> Replacer([{
@@ -291,6 +302,16 @@ def test_default():
     }])
 
     assert replacer("Hello, ${name}!") == "Hello, World!"
+
+
+@test
+def test_base64uuid4():
+    replacer = Replacer([{
+        "name": "myuuid",
+        "type": "base64uuid4"
+    }])
+
+    assert len(replacer("${myuuid}")) == 22
 
 
 @test
