@@ -7,6 +7,7 @@ setup(
    name='replacements',
    version='1.0',
    description='Replace strings with other strings',
+   long_description_content_type="text/markdown",
    license="MIT",
    long_description=long_description,
    author='Dror Speiser',
